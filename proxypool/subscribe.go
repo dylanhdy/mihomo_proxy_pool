@@ -2,10 +2,11 @@ package proxypool
 
 import (
 	"fmt"
+	"math/rand"
+
 	"github.com/go-resty/resty/v2"
 	logger "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
-	"math/rand"
 )
 
 type RawConfig struct {
@@ -51,10 +52,12 @@ func AddSubscriptionProxies(req AddProxyReq) error {
 	url := req.SubUrl
 
 	var cproxy CProxy
-	for i := 0; i < 5; i++ {
-		cproxy = getRandomCProxy()
-		if cproxy.AliveForTestUrl(url) {
-			break
+	if len(cproxies) > 0 {
+		for i := 0; i < 5; i++ {
+			cproxy = getRandomCProxy()
+			if cproxy.AliveForTestUrl(url) {
+				break
+			}
 		}
 	}
 
