@@ -5,13 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/0x10240/mihomo-proxy-pool/db"
-	"github.com/metacubex/mihomo/adapter"
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/convert"
-	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/tunnel"
-	logger "github.com/sirupsen/logrus"
 	"math/rand"
 	"net"
 	"net/http"
@@ -19,6 +12,14 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/0x10240/mihomo-proxy-pool/db"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/convert"
+	"github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/tunnel"
+	logger "github.com/sirupsen/logrus"
 )
 
 type CProxy = constant.Proxy
@@ -198,7 +199,7 @@ func getListenerKey(localPort int) string {
 
 func InitProxyPool() error {
 	var err error
-	dbClient, err = db.NewRedisClientFromURL("mihomo_proxy_pool", "redis://:@192.168.50.88:6379/0")
+	dbClient, err = db.NewRedisClientFromURL("mihomo_proxy_pool", "redis://:@127.0.0.1:6379/0")
 	if err != nil {
 		return err
 	}
