@@ -1,12 +1,11 @@
-FROM dockerpull.org/debian:12-slim
+FROM golang:1.23-alpine AS builder
+WORKDIR /app
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -o mihomo-proxy-pool 
 
-# 从构建阶段复制已编译的二进制文件到运行镜像
-COPY ./mihomo-proxy-pool /app/mihomo-proxy-pool
-
-RUN chmod 755 /app/mihomo-proxy-pool
-
-# 暴露应用运行的端口
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/mihomo-proxy-pool .
+RUN chmod +x ./mihomo-proxy-pool
 EXPOSE 9999
-
-# 启动服务
-CMD ["/app/mihomo-proxy-pool"]
+CMD ["./mihomo-proxy-pool"]
