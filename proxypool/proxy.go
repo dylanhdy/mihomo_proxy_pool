@@ -41,6 +41,10 @@ type AddProxyReq struct {
 	ForceUpdate bool           `json:"update"`
 }
 
+type DelProxyReq struct {
+	SubName string `json:"sub_name"`
+}
+
 type Proxy struct {
 	Config        map[string]any `json:"config"`
 	Name          string         `json:"name"`

@@ -2,6 +2,12 @@ package server
 
 import (
 	"crypto/subtle"
+	"net/http"
+	"runtime/debug"
+	"sort"
+	"strconv"
+	"strings"
+
 	"github.com/0x10240/mihomo-proxy-pool/proxypool"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -10,11 +16,6 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/log"
 	"github.com/sagernet/cors"
-	"net/http"
-	"runtime/debug"
-	"sort"
-	"strconv"
-	"strings"
 )
 
 var (
@@ -109,6 +110,7 @@ func router(isDebug bool, secret string, cors Cors) *chi.Mux {
 		r.Get("/get", getRandomProxy)
 		r.Get("/all", getAllProxy)
 		r.Post("/add", addProxy)
+		r.Delete("/del", delProxy)
 	})
 
 	return r
@@ -196,6 +198,33 @@ func sortProxies(proxies []proxypool.ProxyResp, sortKey string) {
 			return proxies[i].AddTime.Unix() < proxies[j].AddTime.Unix()
 		})
 	}
+}
+
+func delProxy(w http.ResponseWriter, r *http.Request) {
+	req := proxypool.DelProxyReq{}
+	if err := render.DecodeJSON(r.Body, &req); err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+
+	proxies, err := proxypool.GetProxiesFromDb()
+	if err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError("Failed to retrieve proxies: "+err.Error()))
+		return
+	}
+
+	for _, proxy := range proxies {
+		if proxy.SubName == req.SubName {
+			if err := proxypool.DeleteProxy(proxy); err != nil {
+				log.Warnln("Delete proxy failed: %s", err)
+			}
+		}
+	}
+
+	render.Status(r, 200)
+	render.JSON(w, r, map[string]bool{"success": true})
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
