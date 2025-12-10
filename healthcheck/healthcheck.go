@@ -2,7 +2,6 @@ package healthcheck
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -78,16 +77,16 @@ func DoHealthCheck() error {
 				proxy.OutboundIp = ipinfo.GetProxyOutboundIP(cproxy)
 			}
 
-			if err == nil && proxy.IpRiskScore == "" {
-				proxyStr := fmt.Sprintf("socks5://127.0.0.1:%d", proxy.LocalPort)
-				ipRiskVal, err := ipinfo.GetIpRiskScore(proxy.OutboundIp, proxyStr)
-				if err != nil {
-					logger.Infof("get ip risk info failed")
-				}
-				proxy.IpType = ipRiskVal.IpType
-				proxy.IpRiskScore = ipRiskVal.RiskScore
-				proxy.Region = ipRiskVal.Location
-			}
+			// if err == nil && proxy.IpRiskScore == "" {
+			// 	proxyStr := fmt.Sprintf("socks5://127.0.0.1:%d", proxy.LocalPort)
+			// 	ipRiskVal, err := ipinfo.GetIpRiskScore(proxy.OutboundIp, proxyStr)
+			// 	if err != nil {
+			// 		logger.Infof("get ip risk info failed")
+			// 	}
+			// 	proxy.IpType = ipRiskVal.IpType
+			// 	proxy.IpRiskScore = ipRiskVal.RiskScore
+			// 	proxy.Region = ipRiskVal.Location
+			// }
 
 			// 只有当代理未被删除时，才更新数据库
 			if updateErr := proxypool.UpdateProxyDB(&proxy); updateErr != nil {
