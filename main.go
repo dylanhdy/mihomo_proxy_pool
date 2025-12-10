@@ -25,8 +25,10 @@ func main() {
 		os.Exit(1)
 	}
 	cfg := server.Config{
-		Addr:    "0.0.0.0:9999",
-		IsDebug: true,
+		Addr:        "0.0.0.0:9999",
+		AdminSecret: "251442",
+		UserSecret:  "test109",
+		IsDebug:     true,
 		Cors: server.Cors{
 			AllowOrigins:        []string{},
 			AllowPrivateNetwork: true,

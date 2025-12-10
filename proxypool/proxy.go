@@ -24,7 +24,8 @@ import (
 
 type CProxy = constant.Proxy
 
-var proxyPoolStartPort = 40001
+var proxyPoolStartPort = 10000
+var proxyPoolEndPort = 20000
 var allowIps = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")}
 var localPortMaps = make(map[int]string, 0)
 var cproxies = make(map[string]CProxy, 0)
@@ -61,7 +62,7 @@ type Proxy struct {
 	SubName       string         `json:"sub"`
 }
 
-type ProxyResp struct {
+type AdminProxyResp struct {
 	Name          string    `json:"name"`
 	Server        string    `json:"server"`
 	ServerPort    int       `json:"server_port"`
@@ -79,6 +80,13 @@ type ProxyResp struct {
 	SubName       string    `json:"sub"`
 }
 
+type UserProxyResp struct {
+	Proxy         string    `json:"proxy"`
+	Delay         int       `json:"delay"`
+	OutboundIp    string    `json:"outbound_ip"`
+	LastCheckTime time.Time `json:"last_check_time"`
+}
+
 // CalculateAliveTime calculates the time difference in "XdXhXm" format
 func CalculateAliveTime(addTime int64) string {
 	duration := time.Since(ConvertTimestampToTime(addTime))
@@ -94,8 +102,8 @@ func ConvertTimestampToTime(timestamp int64) time.Time {
 	return time.Unix(timestamp, 0)
 }
 
-func (p Proxy) ToResp() ProxyResp {
-	resp := ProxyResp{
+func (p Proxy) ToAdminResp() AdminProxyResp {
+	resp := AdminProxyResp{
 		Name:          p.Name,
 		LocalPort:     p.LocalPort,
 		Server:        p.Config["server"].(string),
@@ -112,7 +120,16 @@ func (p Proxy) ToResp() ProxyResp {
 		Delay:         p.Delay,
 		SubName:       p.SubName,
 	}
+	return resp
+}
 
+func (p Proxy) ToUserProxyResp() UserProxyResp {
+	resp := UserProxyResp{
+		Proxy:         fmt.Sprintf("mirrorchat.tech:%d", p.LocalPort),
+		OutboundIp:    p.OutboundIp,
+		LastCheckTime: ConvertTimestampToTime(p.LastCheckTime),
+		Delay:         p.Delay,
+	}
 	return resp
 }
 
@@ -265,12 +282,12 @@ func parseProxyLink(link string) (map[string]any, error) {
 }
 
 func getLocalPort() int {
-	for p := proxyPoolStartPort; p <= 65535; p++ {
+	for p := proxyPoolStartPort; p <= proxyPoolEndPort; p++ {
 		if _, ok := localPortMaps[p]; !ok {
 			return p
 		}
 	}
-	return rand.Intn(65535)
+	return rand.Intn(proxyPoolEndPort-proxyPoolStartPort) + proxyPoolStartPort
 }
 
 func addMihomoProxy(proxyCfg map[string]any, proxyName string, localPort int) error {
@@ -294,32 +311,32 @@ func addMihomoProxy(proxyCfg map[string]any, proxyName string, localPort int) er
 	return nil
 }
 
-func GetRandomProxy() (ProxyResp, error) {
+func GetRandomProxy() (UserProxyResp, error) {
 	proxy := Proxy{}
 	proxyStr, err := dbClient.GetRandom()
 	if err != nil {
-		return ProxyResp{}, err
+		return UserProxyResp{}, err
 	}
 	if err = json.Unmarshal([]byte(proxyStr), &proxy); err != nil {
-		return ProxyResp{}, err
+		return UserProxyResp{}, err
 	}
 
-	return proxy.ToResp(), nil
+	return proxy.ToUserProxyResp(), nil
 }
 
-func GetAllProxies() ([]ProxyResp, error) {
+func GetAllProxies() ([]AdminProxyResp, error) {
 	proxies, err := dbClient.GetAllValues()
 	if err != nil {
-		return []ProxyResp{}, err
+		return []AdminProxyResp{}, err
 	}
 
-	ret := []ProxyResp{}
+	ret := []AdminProxyResp{}
 	for _, proxy := range proxies {
 		item := Proxy{}
 		if err = json.Unmarshal([]byte(proxy), &item); err != nil {
 			continue
 		}
-		ret = append(ret, item.ToResp())
+		ret = append(ret, item.ToAdminResp())
 	}
 
 	return ret, nil

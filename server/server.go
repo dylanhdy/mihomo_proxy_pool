@@ -27,7 +27,8 @@ type Config struct {
 	TLSAddr     string
 	UnixAddr    string
 	PipeAddr    string
-	Secret      string
+	AdminSecret string
+	UserSecret  string
 	Certificate string
 	PrivateKey  string
 	DohServer   string
@@ -87,7 +88,7 @@ func authentication(secret string) func(http.Handler) http.Handler {
 	}
 }
 
-func router(isDebug bool, secret string, cors Cors) *chi.Mux {
+func router(isDebug bool, adminSecret, userSecret string, cors Cors) *chi.Mux {
 	r := chi.NewRouter()
 	cors.Apply(r)
 	if isDebug {
@@ -103,11 +104,16 @@ func router(isDebug bool, secret string, cors Cors) *chi.Mux {
 	}
 
 	r.Group(func(r chi.Router) {
-		if secret != "" {
-			r.Use(authentication(secret))
-		}
 		r.Get("/", hello)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(authentication(userSecret))
 		r.Get("/get", getRandomProxy)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(authentication(adminSecret))
 		r.Get("/all", getAllProxy)
 		r.Post("/add", addProxy)
 		r.Delete("/del", delProxy)
@@ -183,7 +189,7 @@ func getAllProxy(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, resp)
 }
 
-func sortProxies(proxies []proxypool.ProxyResp, sortKey string) {
+func sortProxies(proxies []proxypool.AdminProxyResp, sortKey string) {
 	switch sortKey {
 	case "risk_score":
 		sort.Slice(proxies, func(i, j int) bool {
@@ -228,7 +234,7 @@ func delProxy(w http.ResponseWriter, r *http.Request) {
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, render.M{"hello": "mihomo proxy pool"})
+	render.JSON(w, r, render.M{"hello": "proxy pool mirrorchat.tech:9999"})
 }
 
 func Start(cfg *Config) {
@@ -248,7 +254,7 @@ func Start(cfg *Config) {
 		log.Infoln("RESTful API listening at: %s", l.Addr().String())
 
 		server := &http.Server{
-			Handler: router(cfg.IsDebug, cfg.Secret, cfg.Cors),
+			Handler: router(cfg.IsDebug, cfg.AdminSecret, cfg.UserSecret, cfg.Cors),
 		}
 		httpServer = server
 		if err = server.Serve(l); err != nil {
