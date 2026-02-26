@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,16 +34,46 @@ var listeners = make(map[string]CListener, 0)
 var dbClient *db.RedisClient
 var mu = sync.Mutex{}
 
+const subscriptionKeyPrefix = "sub:"
+const proxyKeyPrefix = "proxy:"
+
+func getSubscriptionKey(subName string) string {
+	return subscriptionKeyPrefix + subName
+}
+
+func getProxyKey(name string) string {
+	return proxyKeyPrefix + name
+}
+
 type AddProxyReq struct {
 	Link        string         `json:"link"`   // 链接
 	Config      map[string]any `json:"config"` // 配置，json信息
-	SubUrl      string         `json:"sub"`    // 订阅链接
-	SubName     string         `json:"sub_name"`
+	SubName     string         `json:"sub_name,omitempty"`
 	ForceUpdate bool           `json:"update"`
 }
 
 type DelProxyReq struct {
+	Name string `json:"name"`
+}
+
+type AddSubscriptionReq struct {
+	SubUrl      string `json:"sub"` // 订阅链接
+	SubName     string `json:"sub_name"`
+	ForceUpdate bool   `json:"update"`
+}
+
+type DelSubscriptionReq struct {
 	SubName string `json:"sub_name"`
+}
+
+type SubscriptionResp struct {
+	SubName string `json:"sub_name"`
+	SubUrl  string `json:"sub_url"`
+}
+
+type Subscription struct {
+	SubName string `json:"sub_name"`
+	SubUrl  string `json:"sub_url"`
 }
 
 type Proxy struct {
@@ -136,14 +167,14 @@ func GetProxyTransport(proxy CProxy) *http.Transport {
 }
 
 func GetProxiesFromDb() (map[string]Proxy, error) {
-	resp, err := dbClient.GetAll()
+	resp, err := dbClient.GetAllByPrefix(proxyKeyPrefix)
 	if err != nil {
 		return map[string]Proxy{}, err
 	}
 
 	ret := make(map[string]Proxy, 0)
 
-	for k, value := range resp {
+	for _, value := range resp {
 		//if !strings.Contains(k, "103.114.163.93") {
 		//	continue
 		//}
@@ -152,26 +183,71 @@ func GetProxiesFromDb() (map[string]Proxy, error) {
 			logger.Infof("unmarshal proxy: %v from db failed", value)
 			continue
 		}
-		ret[k] = proxy
+		ret[proxy.Name] = proxy
 	}
 
 	return ret, nil
+}
+
+func GetSubscriptionsFromDb() (map[string]Subscription, error) {
+	resp, err := dbClient.GetAllByPrefix(subscriptionKeyPrefix)
+	if err != nil {
+		return map[string]Subscription{}, err
+	}
+
+	ret := make(map[string]Subscription)
+	for key, value := range resp {
+		sub := Subscription{}
+		if err := json.Unmarshal([]byte(value), &sub); err != nil {
+			logger.Infof("unmarshal subscription: %v from db failed", value)
+			continue
+		}
+		if sub.SubName == "" {
+			sub.SubName = strings.TrimPrefix(key, subscriptionKeyPrefix)
+		}
+		ret[sub.SubName] = sub
+	}
+
+	return ret, nil
+}
+
+func AddSubscription(req AddSubscriptionReq) error {
+	req.SubName = strings.TrimSpace(req.SubName)
+	req.SubUrl = strings.TrimSpace(req.SubUrl)
+
+	if req.SubName == "" {
+		return fmt.Errorf("sub_name is required")
+	}
+	if req.SubUrl == "" {
+		return fmt.Errorf("sub url is required")
+	}
+
+	if err := syncSubscriptionProxies(req); err != nil {
+		return err
+	}
+
+	key := getSubscriptionKey(req.SubName)
+	sub := Subscription{
+		SubName: req.SubName,
+		SubUrl:  req.SubUrl,
+	}
+	return dbClient.Put(key, sub)
 }
 
 func DeleteProxy(proxy Proxy) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	proxyKey := proxy.Name
+	key := getProxyKey(proxy.Name)
 
-	if err := dbClient.Delete(proxyKey); err != nil {
-		logger.Errorf("delete proxy %s failed, err: %v", proxyKey, err)
+	if err := dbClient.Delete(key); err != nil {
+		logger.Errorf("delete proxy %s failed, err: %v", key, err)
 		return err
 	}
 
 	listenerKey := getListenerKey(proxy.LocalPort)
 
-	delete(cproxies, proxyKey)
+	delete(cproxies, proxy.Name)
 	delete(listeners, listenerKey)
 	delete(localPortMaps, proxy.LocalPort)
 
@@ -185,9 +261,10 @@ func UpdateProxyDB(proxy *Proxy) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	key := proxy.Config["name"].(string)
-	proxy.Name = key
+	name := proxy.Name
+	proxy.Name = name
 	proxy.LastCheckTime = time.Now().Unix()
+	key := getProxyKey(name)
 
 	if err := dbClient.Put(key, proxy); err != nil {
 		logger.Errorf("update proxy failed: %v", err)
@@ -208,7 +285,7 @@ func InitProxyPool() error {
 		return err
 	}
 
-	values, err := dbClient.GetAllValues()
+	values, err := dbClient.GetAllByPrefix(proxyKeyPrefix)
 	if err != nil {
 		return err
 	}
@@ -295,31 +372,35 @@ func addMihomoProxy(proxyCfg map[string]any, proxyName string, localPort int) er
 }
 
 func GetRandomProxy() (ProxyResp, error) {
-	proxy := Proxy{}
-	proxyStr, err := dbClient.GetRandom()
+	proxies, err := GetProxiesFromDb()
 	if err != nil {
 		return ProxyResp{}, err
 	}
-	if err = json.Unmarshal([]byte(proxyStr), &proxy); err != nil {
-		return ProxyResp{}, err
+	if len(proxies) == 0 {
+		return ProxyResp{}, fmt.Errorf("no proxy available")
 	}
 
-	return proxy.ToResp(), nil
+	index := rand.Intn(len(proxies))
+	i := 0
+	for _, proxy := range proxies {
+		if i == index {
+			return proxy.ToResp(), nil
+		}
+		i++
+	}
+
+	return ProxyResp{}, fmt.Errorf("no proxy available")
 }
 
 func GetAllProxies() ([]ProxyResp, error) {
-	proxies, err := dbClient.GetAllValues()
+	proxies, err := GetProxiesFromDb()
 	if err != nil {
 		return []ProxyResp{}, err
 	}
 
 	ret := []ProxyResp{}
 	for _, proxy := range proxies {
-		item := Proxy{}
-		if err = json.Unmarshal([]byte(proxy), &item); err != nil {
-			continue
-		}
-		ret = append(ret, item.ToResp())
+		ret = append(ret, proxy.ToResp())
 	}
 
 	return ret, nil
@@ -339,27 +420,64 @@ func AddProxy(req AddProxyReq) error {
 		cfg = req.Config
 	}
 
-	key := fmt.Sprintf("%v:%v", cfg["server"], cfg["port"])
+	name := fmt.Sprintf("%v:%v", cfg["server"], cfg["port"])
+	key := getProxyKey(name)
+
 	if !req.ForceUpdate && dbClient.Exists(key) {
 		logger.Infof("key: %s exists", key)
 		return nil
 	}
 
-	cfg["name"] = key
+	cfg["name"] = name
 	localPort := getLocalPort()
 	proxy := Proxy{
 		Config:    cfg,
 		AddTime:   time.Now().Unix(),
 		LocalPort: localPort,
-		Name:      key,
+		Name:      name,
 		SubName:   req.SubName,
 	}
 
-	logger.Infof("Adding proxy %s on local port: %d", key, localPort)
-	if err = addMihomoProxy(cfg, key, localPort); err != nil {
+	if err = addMihomoProxy(cfg, name, localPort); err != nil {
 		return err
 	}
 
-	localPortMaps[localPort] = key
+	localPortMaps[localPort] = name
 	return dbClient.Put(key, proxy)
+}
+
+func DeleteProxyByName(name string) error {
+	proxies, err := GetProxiesFromDb()
+	if err != nil {
+		return err
+	}
+
+	proxy, ok := proxies[name]
+	if !ok {
+		return fmt.Errorf("proxy %s not found", name)
+	}
+
+	return DeleteProxy(proxy)
+}
+
+func DeleteSubscription(req DelSubscriptionReq) error {
+	proxies, err := GetProxiesFromDb()
+	if err != nil {
+		return err
+	}
+
+	for _, proxy := range proxies {
+		if proxy.SubName != req.SubName {
+			continue
+		}
+		if err := DeleteProxy(proxy); err != nil {
+			logger.Warnf("Delete proxy failed: %v", err)
+		}
+	}
+
+	if err := dbClient.Delete(getSubscriptionKey(req.SubName)); err != nil {
+		return err
+	}
+
+	return nil
 }

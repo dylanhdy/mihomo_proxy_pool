@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/0x10240/mihomo-proxy-pool/healthcheck"
 	"github.com/0x10240/mihomo-proxy-pool/proxypool"
@@ -25,8 +26,9 @@ func main() {
 		os.Exit(1)
 	}
 	cfg := server.Config{
-		Addr:    "0.0.0.0:9999",
-		IsDebug: true,
+		Addr:                       "0.0.0.0:9999",
+		IsDebug:                    true,
+		SubscriptionUpdateInterval: 24 * time.Hour,
 		Cors: server.Cors{
 			AllowOrigins:        []string{},
 			AllowPrivateNetwork: true,
@@ -34,6 +36,7 @@ func main() {
 	}
 
 	go healthcheck.StartHealthCheckScheduler()
+	go proxypool.StartSubscriptionUpdateScheduler(cfg.SubscriptionUpdateInterval)
 
 	server.Start(&cfg)
 }

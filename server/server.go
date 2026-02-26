@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/0x10240/mihomo-proxy-pool/proxypool"
 	"github.com/go-chi/chi/v5"
@@ -23,16 +24,17 @@ var (
 )
 
 type Config struct {
-	Addr        string
-	TLSAddr     string
-	UnixAddr    string
-	PipeAddr    string
-	Secret      string
-	Certificate string
-	PrivateKey  string
-	DohServer   string
-	IsDebug     bool
-	Cors        Cors
+	Addr                       string
+	TLSAddr                    string
+	UnixAddr                   string
+	PipeAddr                   string
+	Secret                     string
+	Certificate                string
+	PrivateKey                 string
+	DohServer                  string
+	IsDebug                    bool
+	SubscriptionUpdateInterval time.Duration
+	Cors                       Cors
 }
 
 type Cors struct {
@@ -111,6 +113,11 @@ func router(isDebug bool, secret string, cors Cors) *chi.Mux {
 		r.Get("/all", getAllProxy)
 		r.Post("/add", addProxy)
 		r.Delete("/del", delProxy)
+		r.Route("/sub", func(r chi.Router) {
+			r.Post("/add", addSubscription)
+			r.Get("/all", getAllSubscription)
+			r.Delete("/del", delSubscription)
+		})
 	})
 
 	return r
@@ -124,18 +131,28 @@ func addProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.SubUrl != "" {
-		if err := proxypool.AddSubscriptionProxies(req); err != nil {
-			render.Status(r, http.StatusServiceUnavailable)
-			render.JSON(w, r, newError(err.Error()))
-			return
-		}
-	} else {
-		if err := proxypool.AddProxy(req); err != nil {
-			render.Status(r, http.StatusServiceUnavailable)
-			render.JSON(w, r, newError(err.Error()))
-			return
-		}
+	if err := proxypool.AddProxy(req); err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
+
+	render.Status(r, 200)
+	render.JSON(w, r, map[string]bool{"success": true})
+}
+
+func addSubscription(w http.ResponseWriter, r *http.Request) {
+	req := proxypool.AddSubscriptionReq{}
+	if err := render.DecodeJSON(r.Body, &req); err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+
+	if err := proxypool.AddSubscription(req); err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError(err.Error()))
+		return
 	}
 
 	render.Status(r, 200)
@@ -183,6 +200,31 @@ func getAllProxy(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, resp)
 }
 
+func getAllSubscription(w http.ResponseWriter, r *http.Request) {
+	subscriptionMap, err := proxypool.GetSubscriptionsFromDb()
+	if err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError("Failed to retrieve subscriptions: "+err.Error()))
+		return
+	}
+
+	subscriptions := make([]proxypool.SubscriptionResp, 0, len(subscriptionMap))
+	for subName, sub := range subscriptionMap {
+		subscriptions = append(subscriptions, proxypool.SubscriptionResp{SubName: subName, SubUrl: sub.SubUrl})
+	}
+
+	sort.Slice(subscriptions, func(i, j int) bool {
+		return subscriptions[i].SubName < subscriptions[j].SubName
+	})
+
+	resp := map[string]any{
+		"count":         len(subscriptions),
+		"subscriptions": subscriptions,
+	}
+
+	render.JSON(w, r, resp)
+}
+
 func sortProxies(proxies []proxypool.ProxyResp, sortKey string) {
 	switch sortKey {
 	case "risk_score":
@@ -208,19 +250,40 @@ func delProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxies, err := proxypool.GetProxiesFromDb()
-	if err != nil {
-		render.Status(r, http.StatusServiceUnavailable)
-		render.JSON(w, r, newError("Failed to retrieve proxies: "+err.Error()))
+	if req.Name == "" {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("name is required"))
 		return
 	}
 
-	for _, proxy := range proxies {
-		if proxy.SubName == req.SubName {
-			if err := proxypool.DeleteProxy(proxy); err != nil {
-				log.Warnln("Delete proxy failed: %s", err)
-			}
-		}
+	if err := proxypool.DeleteProxyByName(req.Name); err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
+
+	render.Status(r, 200)
+	render.JSON(w, r, map[string]bool{"success": true})
+}
+
+func delSubscription(w http.ResponseWriter, r *http.Request) {
+	req := proxypool.DelSubscriptionReq{}
+	if err := render.DecodeJSON(r.Body, &req); err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+
+	if req.SubName == "" {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("sub_name is required"))
+		return
+	}
+
+	if err := proxypool.DeleteSubscription(req); err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError("Failed to delete subscription: "+err.Error()))
+		return
 	}
 
 	render.Status(r, 200)

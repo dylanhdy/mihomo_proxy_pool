@@ -3,6 +3,7 @@ package proxypool
 import (
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	logger "github.com/sirupsen/logrus"
@@ -48,7 +49,7 @@ func readConfig(url string, proxy CProxy) ([]byte, error) {
 	return resp.Body(), nil
 }
 
-func AddSubscriptionProxies(req AddProxyReq) error {
+func syncSubscriptionProxies(req AddSubscriptionReq) error {
 	url := req.SubUrl
 
 	var cproxy CProxy
@@ -84,7 +85,7 @@ func AddSubscriptionProxies(req AddProxyReq) error {
 
 	for providerName, provider := range rawCfg.Providers {
 		if providerUrl, ok := provider["url"].(string); ok {
-			err := AddSubscriptionProxies(AddProxyReq{
+			err := syncSubscriptionProxies(AddSubscriptionReq{
 				SubUrl:      providerUrl,
 				SubName:     providerName,
 				ForceUpdate: req.ForceUpdate,
@@ -96,4 +97,32 @@ func AddSubscriptionProxies(req AddProxyReq) error {
 	}
 
 	return nil
+}
+
+func StartSubscriptionUpdateScheduler(interval time.Duration) {
+	if interval <= 0 {
+		interval = 24 * time.Hour
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		subscriptions, err := GetSubscriptionsFromDb()
+		if err != nil {
+			logger.Errorf("GetSubscriptionsFromDb failed: %v", err)
+			continue
+		}
+
+		for _, sub := range subscriptions {
+			err := syncSubscriptionProxies(AddSubscriptionReq{
+				SubUrl:      sub.SubUrl,
+				SubName:     sub.SubName,
+				ForceUpdate: true,
+			})
+			if err != nil {
+				logger.Errorf("Update subscription %s failed: %v", sub.SubName, err)
+			}
+		}
+	}
 }

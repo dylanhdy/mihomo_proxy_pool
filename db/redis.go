@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"sync"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -13,7 +13,6 @@ import (
 // RedisClient 封装了 Redis 操作
 type RedisClient struct {
 	name   string
-	mutex  sync.Mutex
 	client *redis.Client
 	ctx    context.Context
 }
@@ -49,9 +48,6 @@ func (r *RedisClient) Get(key string) (string, error) {
 
 // GetRandom 随机获取一个值
 func (r *RedisClient) GetRandom() (string, error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	keys, err := r.client.HKeys(r.ctx, r.name).Result()
 	if err != nil {
 		return "", err
@@ -65,9 +61,6 @@ func (r *RedisClient) GetRandom() (string, error) {
 
 // Put 设置键值对
 func (r *RedisClient) Put(key string, val any) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	var data string
 	switch v := val.(type) {
 	case string:
@@ -84,17 +77,11 @@ func (r *RedisClient) Put(key string, val any) error {
 
 // Delete 删除指定键
 func (r *RedisClient) Delete(key string) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	return r.client.HDel(r.ctx, r.name, key).Err()
 }
 
 // Exists 检查键是否存在
 func (r *RedisClient) Exists(key string) bool {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	ret, err := r.client.HExists(r.ctx, r.name, key).Result()
 	if err != nil {
 		return false
@@ -104,9 +91,6 @@ func (r *RedisClient) Exists(key string) bool {
 
 // GetAllValues 获取所有值
 func (r *RedisClient) GetAllValues() ([]string, error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	values, err := r.client.HVals(r.ctx, r.name).Result()
 	if err != nil {
 		return nil, err
@@ -116,14 +100,38 @@ func (r *RedisClient) GetAllValues() ([]string, error) {
 
 // GetAll 获取所有键值对
 func (r *RedisClient) GetAll() (map[string]string, error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	items, err := r.client.HGetAll(r.ctx, r.name).Result()
 	if err != nil {
 		return nil, err
 	}
 	return items, nil
+}
+
+// GetAllByPrefix 获取指定前缀的键值对
+func (r *RedisClient) GetAllByPrefix(prefix string) (map[string]string, error) {
+	ret := make(map[string]string)
+	var cursor uint64
+	for {
+		items, nextCursor, err := r.client.HScan(r.ctx, r.name, cursor, prefix+"*", 100).Result()
+		if err != nil {
+			return nil, err
+		}
+
+		for i := 0; i+1 < len(items); i += 2 {
+			key := items[i]
+			if !strings.HasPrefix(key, prefix) {
+				continue
+			}
+			ret[key] = items[i+1]
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return ret, nil
 }
 
 // Clear 清空哈希表
