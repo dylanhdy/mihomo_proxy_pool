@@ -58,8 +58,9 @@ class MiHoMoProxyPool:
 
     def load_proxies(self):
         if self.clash_cfg_path:
-            data = yaml.full_load(self.clash_cfg_path)
-            return data['proxies']
+            with open(self.clash_cfg_path, 'r') as f:
+                data = yaml.full_load(f)
+                return data['proxies']
 
         if self.sub_url:
             req = requests.get(self.sub_url, headers=self.headers)
