@@ -45,6 +45,23 @@ func getProxyKey(name string) string {
 	return proxyKeyPrefix + name
 }
 
+type AddSubscriptionReq struct {
+	SubName     string `json:"sub_name"`
+	SubURL      string `json:"sub_url"` // 订阅链接
+	ForceUpdate bool   `json:"update"`
+}
+
+type DelSubscriptionReq struct {
+	SubName string `json:"sub_name"`
+}
+
+type Subscription struct {
+	SubName string `json:"sub_name"`
+	SubURL  string `json:"sub_url"` // 订阅链接
+}
+
+type SubscriptionResp = Subscription
+
 type AddProxyReq struct {
 	Link        string         `json:"link"`   // 链接
 	Config      map[string]any `json:"config"` // 配置，json信息
@@ -54,26 +71,6 @@ type AddProxyReq struct {
 
 type DelProxyReq struct {
 	Name string `json:"name"`
-}
-
-type AddSubscriptionReq struct {
-	SubUrl      string `json:"sub"` // 订阅链接
-	SubName     string `json:"sub_name"`
-	ForceUpdate bool   `json:"update"`
-}
-
-type DelSubscriptionReq struct {
-	SubName string `json:"sub_name"`
-}
-
-type SubscriptionResp struct {
-	SubName string `json:"sub_name"`
-	SubUrl  string `json:"sub_url"`
-}
-
-type Subscription struct {
-	SubName string `json:"sub_name"`
-	SubUrl  string `json:"sub_url"`
 }
 
 type Proxy struct {
@@ -213,12 +210,12 @@ func GetSubscriptionsFromDb() (map[string]Subscription, error) {
 
 func AddSubscription(req AddSubscriptionReq) error {
 	req.SubName = strings.TrimSpace(req.SubName)
-	req.SubUrl = strings.TrimSpace(req.SubUrl)
+	req.SubURL = strings.TrimSpace(req.SubURL)
 
 	if req.SubName == "" {
 		return fmt.Errorf("sub_name is required")
 	}
-	if req.SubUrl == "" {
+	if req.SubURL == "" {
 		return fmt.Errorf("sub url is required")
 	}
 
@@ -229,7 +226,7 @@ func AddSubscription(req AddSubscriptionReq) error {
 	key := getSubscriptionKey(req.SubName)
 	sub := Subscription{
 		SubName: req.SubName,
-		SubUrl:  req.SubUrl,
+		SubURL:  req.SubURL,
 	}
 	return dbClient.Put(key, sub)
 }

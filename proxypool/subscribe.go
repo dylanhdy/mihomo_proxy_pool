@@ -50,7 +50,7 @@ func readConfig(url string, proxy CProxy) ([]byte, error) {
 }
 
 func syncSubscriptionProxies(req AddSubscriptionReq) error {
-	url := req.SubUrl
+	url := req.SubURL
 
 	var cproxy CProxy
 	if len(cproxies) > 0 {
@@ -86,7 +86,7 @@ func syncSubscriptionProxies(req AddSubscriptionReq) error {
 	for providerName, provider := range rawCfg.Providers {
 		if providerUrl, ok := provider["url"].(string); ok {
 			err := syncSubscriptionProxies(AddSubscriptionReq{
-				SubUrl:      providerUrl,
+				SubURL:      providerUrl,
 				SubName:     providerName,
 				ForceUpdate: req.ForceUpdate,
 			})
@@ -116,8 +116,8 @@ func StartSubscriptionUpdateScheduler(interval time.Duration) {
 
 		for _, sub := range subscriptions {
 			err := syncSubscriptionProxies(AddSubscriptionReq{
-				SubUrl:      sub.SubUrl,
 				SubName:     sub.SubName,
+				SubURL:      sub.SubURL,
 				ForceUpdate: true,
 			})
 			if err != nil {

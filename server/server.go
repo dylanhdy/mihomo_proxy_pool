@@ -210,7 +210,7 @@ func getAllSubscription(w http.ResponseWriter, r *http.Request) {
 
 	subscriptions := make([]proxypool.SubscriptionResp, 0, len(subscriptionMap))
 	for subName, sub := range subscriptionMap {
-		subscriptions = append(subscriptions, proxypool.SubscriptionResp{SubName: subName, SubUrl: sub.SubUrl})
+		subscriptions = append(subscriptions, proxypool.SubscriptionResp{SubName: subName, SubURL: sub.SubURL})
 	}
 
 	sort.Slice(subscriptions, func(i, j int) bool {
