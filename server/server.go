@@ -208,9 +208,20 @@ func getAllSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	proxyCounts, err := proxypool.CountAvailableProxiesBySubscription()
+	if err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError("Failed to retrieve subscription proxy counts: "+err.Error()))
+		return
+	}
+
 	subscriptions := make([]proxypool.SubscriptionResp, 0, len(subscriptionMap))
 	for subName, sub := range subscriptionMap {
-		subscriptions = append(subscriptions, proxypool.SubscriptionResp{SubName: subName, SubURL: sub.SubURL})
+		subscriptions = append(subscriptions, proxypool.SubscriptionResp{
+			SubName:    subName,
+			SubURL:     sub.SubURL,
+			ProxyCount: proxyCounts[subName],
+		})
 	}
 
 	sort.Slice(subscriptions, func(i, j int) bool {

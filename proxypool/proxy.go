@@ -60,7 +60,11 @@ type Subscription struct {
 	SubURL  string `json:"sub_url"` // 订阅链接
 }
 
-type SubscriptionResp = Subscription
+type SubscriptionResp struct {
+	SubName    string `json:"sub_name"`
+	SubURL     string `json:"sub_url"`
+	ProxyCount int    `json:"proxy_count"`
+}
 
 type AddProxyReq struct {
 	Link        string         `json:"link"`   // 链接
@@ -206,6 +210,23 @@ func GetSubscriptionsFromDb() (map[string]Subscription, error) {
 	}
 
 	return ret, nil
+}
+
+func CountAvailableProxiesBySubscription() (map[string]int, error) {
+	proxies, err := GetProxiesFromDb()
+	if err != nil {
+		return map[string]int{}, err
+	}
+
+	counts := make(map[string]int)
+	for _, proxy := range proxies {
+		if proxy.SubName == "" {
+			continue
+		}
+		counts[proxy.SubName]++
+	}
+
+	return counts, nil
 }
 
 func AddSubscription(req AddSubscriptionReq) error {
