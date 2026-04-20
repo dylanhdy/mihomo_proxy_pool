@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/0x10240/mihomo-proxy-pool/db"
 	"github.com/chromedp/chromedp"
 	logger "github.com/sirupsen/logrus"
-	"log"
-	"strings"
 )
 
 var ipRiskDb *db.RedisClient
@@ -80,7 +81,7 @@ func GetIpRiskScore(server string, proxy string) (IpRiskScore, error) {
 
 	// Store result in the database
 	if err = ipRiskDb.Put(ip, result); err != nil {
-		logger.Warning("put ip: %v score to db failed, err: %v", server, err)
+		logger.Warningf("put ip: %v score to db failed, err: %v", server, err)
 	}
 
 	return result, nil
