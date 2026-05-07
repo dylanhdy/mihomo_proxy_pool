@@ -28,7 +28,7 @@ func main() {
 	cfg := server.Config{
 		Addr:                       "0.0.0.0:9999",
 		IsDebug:                    true,
-		SubscriptionUpdateInterval: 24 * time.Hour,
+		SubscriptionUpdateInterval: 12 * time.Hour,
 		Cors: server.Cors{
 			AllowOrigins:        []string{},
 			AllowPrivateNetwork: true,

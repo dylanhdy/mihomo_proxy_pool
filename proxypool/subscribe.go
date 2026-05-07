@@ -101,7 +101,7 @@ func syncSubscriptionProxies(req AddSubscriptionReq) error {
 
 func StartSubscriptionUpdateScheduler(interval time.Duration) {
 	if interval <= 0 {
-		interval = 24 * time.Hour
+		interval = 12 * time.Hour
 	}
 
 	ticker := time.NewTicker(interval)
