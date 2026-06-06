@@ -441,6 +441,20 @@ func AddProxy(req AddProxyReq) error {
 	name := fmt.Sprintf("%v:%v", cfg["server"], cfg["port"])
 	key := getProxyKey(name)
 
+	if req.ForceUpdate && dbClient.Exists(key) {
+		var oldProxy Proxy
+		value, getErr := dbClient.Get(key)
+		if getErr != nil {
+			return getErr
+		}
+		if err = json.Unmarshal([]byte(value), &oldProxy); err != nil {
+			return err
+		}
+		if err = DeleteProxy(oldProxy); err != nil {
+			return err
+		}
+	}
+
 	if !req.ForceUpdate && dbClient.Exists(key) {
 		logger.Infof("key: %s exists", key)
 		return nil
