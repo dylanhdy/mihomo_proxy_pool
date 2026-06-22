@@ -256,6 +256,10 @@ func DeleteProxy(proxy Proxy) error {
 	mu.Lock()
 	defer mu.Unlock()
 
+	return deleteProxyLocked(proxy)
+}
+
+func deleteProxyLocked(proxy Proxy) error {
 	key := getProxyKey(proxy.Name)
 
 	if err := dbClient.Delete(key); err != nil {
@@ -359,7 +363,7 @@ func parseProxyLink(link string) (map[string]any, error) {
 	return ret, nil
 }
 
-func getLocalPort() int {
+func getLocalPortLocked() int {
 	for p := proxyPoolStartPort; p <= 65535; p++ {
 		if _, ok := localPortMaps[p]; !ok {
 			return p
@@ -368,7 +372,7 @@ func getLocalPort() int {
 	return rand.Intn(65535)
 }
 
-func addMihomoProxy(proxyCfg map[string]any, proxyName string, localPort int) error {
+func addMihomoProxyLocked(proxyCfg map[string]any, proxyName string, localPort int) error {
 	cproxy, err := adapter.ParseProxy(proxyCfg)
 	if err != nil {
 		return err
@@ -441,6 +445,9 @@ func AddProxy(req AddProxyReq) error {
 	name := fmt.Sprintf("%v:%v", cfg["server"], cfg["port"])
 	key := getProxyKey(name)
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	if req.ForceUpdate && dbClient.Exists(key) {
 		var oldProxy Proxy
 		value, getErr := dbClient.Get(key)
@@ -450,7 +457,7 @@ func AddProxy(req AddProxyReq) error {
 		if err = json.Unmarshal([]byte(value), &oldProxy); err != nil {
 			return err
 		}
-		if err = DeleteProxy(oldProxy); err != nil {
+		if err = deleteProxyLocked(oldProxy); err != nil {
 			return err
 		}
 	}
@@ -461,7 +468,7 @@ func AddProxy(req AddProxyReq) error {
 	}
 
 	cfg["name"] = name
-	localPort := getLocalPort()
+	localPort := getLocalPortLocked()
 	proxy := Proxy{
 		Config:    cfg,
 		AddTime:   time.Now().Unix(),
@@ -470,7 +477,7 @@ func AddProxy(req AddProxyReq) error {
 		SubName:   req.SubName,
 	}
 
-	if err = addMihomoProxy(cfg, name, localPort); err != nil {
+	if err = addMihomoProxyLocked(cfg, name, localPort); err != nil {
 		return err
 	}
 

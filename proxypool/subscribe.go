@@ -72,6 +72,36 @@ func syncSubscriptionProxies(req AddSubscriptionReq) error {
 		return fmt.Errorf("YAML unmarshal failed: %v", err)
 	}
 
+	upstreamNames := make(map[string]struct{}, len(rawCfg.Proxies))
+	for _, rawProxy := range rawCfg.Proxies {
+		server, ok := rawProxy["server"]
+		if !ok {
+			continue
+		}
+		port, ok := rawProxy["port"]
+		if !ok {
+			continue
+		}
+		upstreamNames[fmt.Sprintf("%v:%v", server, port)] = struct{}{}
+	}
+
+	localProxies, err := GetProxiesFromDb()
+	if err != nil {
+		return err
+	}
+
+	for _, proxy := range localProxies {
+		if proxy.SubName != req.SubName {
+			continue
+		}
+		if _, ok := upstreamNames[proxy.Name]; ok {
+			continue
+		}
+		if err := DeleteProxy(proxy); err != nil {
+			logger.Errorf("DeleteProxy failed for %s: %v", proxy.Name, err)
+		}
+	}
+
 	for _, rawProxy := range rawCfg.Proxies {
 		err := AddProxy(AddProxyReq{
 			Config:      rawProxy,
