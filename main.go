@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/0x10240/mihomo-proxy-pool/healthcheck"
 	"github.com/0x10240/mihomo-proxy-pool/proxypool"
 	"github.com/0x10240/mihomo-proxy-pool/server"
 	"github.com/sirupsen/logrus"
@@ -35,7 +34,6 @@ func main() {
 		},
 	}
 
-	go healthcheck.StartHealthCheckScheduler()
 	go proxypool.StartSubscriptionUpdateScheduler(cfg.SubscriptionUpdateInterval)
 
 	server.Start(&cfg)

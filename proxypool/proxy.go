@@ -279,23 +279,6 @@ func deleteProxyLocked(proxy Proxy) error {
 	return nil
 }
 
-func UpdateProxyDB(proxy *Proxy) error {
-	mu.Lock()
-	defer mu.Unlock()
-
-	name := proxy.Name
-	proxy.Name = name
-	proxy.LastCheckTime = time.Now().Unix()
-	key := getProxyKey(name)
-
-	if err := dbClient.Put(key, proxy); err != nil {
-		logger.Errorf("update proxy failed: %v", err)
-		return err
-	}
-
-	return nil
-}
-
 func getListenerKey(localPort int) string {
 	return fmt.Sprintf("in_%d", localPort)
 }

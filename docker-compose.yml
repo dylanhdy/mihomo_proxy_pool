@@ -9,7 +9,7 @@ services:
       - ./redis-data:/data
 
   mihomo-proxy-pool:
-    image: crpi-tyce9o8tisqe9vrd.cn-shanghai.personal.cr.aliyuncs.com/crazy_david/mihomo-proxy-pool:dev
+    image: crpi-tyce9o8tisqe9vrd.cn-shanghai.personal.cr.aliyuncs.com/crazy_david/mihomo-proxy-pool:cfef8a3
     container_name: mihomo-proxy-pool
     network_mode: host
     depends_on:

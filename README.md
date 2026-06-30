@@ -113,7 +113,6 @@ curl -X DELETE http://127.0.0.1:9999/del \
 
 - `main.go`: 服务入口
 - `proxypool/`: 代理池和订阅管理
-- `healthcheck/`: 节点健康检查
 - `server/`: HTTP API
 - `db/`: Redis 封装
 - `ipinfo/`: 出口 IP 信息补充

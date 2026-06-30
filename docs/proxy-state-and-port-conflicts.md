@@ -6,23 +6,16 @@ This document describes the current proxy state model, the latest Redis/runtime 
 
 Latest check result:
 
-- Redis `proxy:*` records: `374`.
-- Valid proxy JSON records: `374`.
+- Redis `proxy:*` records: `365`.
+- Valid proxy JSON records: `365`.
 - Records with missing or invalid `local_port`: `0`.
-- Unique Redis `local_port` values: `374`.
+- Unique Redis `local_port` values: `365`.
 - Duplicate Redis `local_port` values: `0`.
-- TCP listeners owned by `mihomo-proxy-pool`: `370`.
-- Redis records without a matching TCP listener: `4`.
+- TCP listeners owned by `mihomo-proxy-pool`: `365`.
+- Redis records without a matching TCP listener: `0`.
 - TCP listeners owned by `mihomo-proxy-pool` without a Redis record: `0`.
 
-Redis currently has no duplicate local ports. The remaining inconsistency is that four Redis proxy records have no matching TCP listener in the running process:
-
-- `40124`
-- `40236`
-- `40330`
-- `40370`
-
-This means local port allocation state is clean from a duplication perspective, but a small number of proxies may be logically present in Redis while not actually serving a local TCP listener.
+Redis currently has no duplicate local ports. Redis proxy records and runtime TCP listeners are fully aligned: every Redis `local_port` has a matching TCP listener, and there are no extra TCP listeners outside Redis.
 
 New local port allocation is configured to start at `61000`. This avoids the default Linux ephemeral port range observed on the host, `32768-60999`, and reduces collisions with short-lived outbound connections. Existing Redis records keep their stored `local_port` values until Redis is rebuilt or the records are migrated.
 
